@@ -26,6 +26,7 @@ library(randomForest)
 library(data.table)
 require(survey)
 require(fasterize)
+require(tibble)
 ```
 
 ## Create Grid Points
@@ -33,57 +34,52 @@ require(fasterize)
 
 ### For BC
 ```{r create Grid for WNA, echo=FALSE}
-####create 4 km grid BC, AB, US########################
+
 CRS.albers <- CRS ("+proj=aea +lat_1=50 +lat_2=58.5 +lat_0=45 +lon_0=-126 +x_0=1000000 +y_0=0 +datum=NAD83 +units=m +no_defs")
+CRS.NAD83 <- CRS("+init=epsg:4269")
 
-# BC <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "ProvincialOutline")
-# AB <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "AlbertaSubRegions_Albers")
-# US <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "USA_States")
-WNA <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "WNA_Merge_States")
-# BC <- spTransform(BC, CRS.albers)
-# AB <- spTransform(AB, CRS.albers)
-# US <- spTransform(US, CRS.albers)
+### Read in the combined state boundary files for WNA
+WNA <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "WNA_Merge_States_WGS84")
+# set projection
 WNA <- spTransform(WNA, CRS.albers)
-WNA2 <- as(WNA ,"SpatialPolygons") ##conver to sp
+
+### Reada in DEM for WNA and transform to NAD83
 WNA_DEM <- raster("./inputs/SpatialFiles/DEMs/WNA_DEM_clipped.tif")
+projection(WNA_DEM) <- CRS.NAD83
 
-# BCdem <- raster("./inputs/SpatialFiles/bc25fill")
-#writeRaster(BCdem, filename = "./inputs/SpatialFiles/BC_DEM.tif")
-###combine alberta and US DEMs
-# ABdem <- raster("./inputs/SpatialFiles/DEMs/AlbertaDEM.tif")
-# USdem1 <- raster("./inputs/SpatialFiles/DEMs/USA_WestDEM.tif")
-# USdem2 <- raster("./inputs/SpatialFiles/DEMs/USA_WestCoastDEM.tif")
-# USdem <- raster::merge(USdem1,USdem2)
-# allDEM <- raster::merge(ABdem,USdem) # not possible to merge BC with rasters due to different resolutions
-# writeRaster(allDEM, filename = "./inputs/SpatialFiles/USA_AB_DEM.tif")
-#allDEM <- raster("USA_AB_DEM.tif")
-
-#####Loop through BC, Alberta, and US to create grid
-# names <- c(BC, AB, US) # spatial file variables from above
-# i <- 0 
-#c("AlbertaSubRegions", "USA_States")
-# grid4k <- foreach(X = names, .combine = rbind) %do% {
-#   i <- i+1
-
- # shp <- spTransform(shp, CRS.albers)
-  size <- 100000
-  p <- spsample(WNA, cellsize = c(size,size), type = "regular")# change this to change grid size and type regular
-  p <- spTransform(p, CRS("+init=epsg:4326")) #to lat long
-  coords <- p@coords
+### set grid size here  
+size <- 100000
+  p <- spsample(WNA, cellsize = c(size), type = "hexagonal")# change this to change grid size and type regular (need 2 sizes)
+  p2 <- spTransform(p, CRS.NAD83) #to lat long in NAD83
+  coords <- p2@coords
   coords <- as.data.frame(coords)
-  dem <- WNA_DEM
-  #if(i == 1){
-   # dem <- BCdem
-  #}else{
-  #  dem <- allDEM
- # }
-  p <- spTransform(p, CRS(proj4string(dem)))
-  coords$elev <- raster::extract(dem,p)
+  #extracts elevation for each point in p
+  coords$elev <- raster::extract(WNA_DEM,p)
   colnames(coords) <- c("longitude","latitude","elevation")
-  state.raster <- rasterize (WNA, WNA_DEM, "State")
+  coords <- as_tibble(rownames_to_column(coords, var = "ID1"))
+  #overlay of points over administrative boundaries
+  WNA$State <- as.character (WNA$State)
+pnt_state <- over(p, WNA[,"State"],  minDimension = 1, returnList = FALSE) 
+  pnt_state <- as_tibble(rownames_to_column(pnt_state, var = "ID1"))
+
+  pnt_BGC <-   
+
+pts.info <- left_join(pnt_state, coords, by = "ID1")
+ # overlay points over BGC boundaries
+   #  coords$BGC <- over(p,)
+ 
+ pts.spatial <- SpatialPointsDataFrame(pts.info[,3:4],
+                    pts.info,    #the R object to convert
+                    proj4string = CRS.NAD83)   # assign a CRS 
+
+  writeOGR (obj = pts.spatial, dsn = "./inputs/created/HexGrid_100k.shp", layer = "GridPoints", driver = "ESRI Shapefile", overwrite_layer = TRUE)
+    
+  #     Grid.States <- st_join(p2, WNA2, join = st_intersects)
+  # Grid.BGC <- st_join 
+  # state.raster <- rasterize (WNA, WNA_DEM, "State")
   # region <- X$STATE
   # coords$Region <- X$STATE
-  grid4k <- coords
+ # grid4k <- coords
 #}
 
 rownames(grid4k) <- NULL
@@ -114,7 +110,7 @@ BCwBGC <- foreach(BGC = allUnits, .combine = rbind) %do%{
   coordinates(dat) <- c("long", "lat")
   #proj4string(dat) <- CRS("+proj=aea +lat_1=50 +lat_2=58.5 +lat_0=45 +lon_0=-126 +x_0=1000000 +y_0=0 +datum=NAD83 +units=m +no_defs")
   #proj4string(dat) <- CRS("+init=epsg:4326") ##WGS84
-  proj4string(dat) <- CRS("+init=epsg:4617") ##NAD83
+  proj4string(dat) <- CRS("+init=epsg:4269") ##NAD83
   dat <- spTransform(dat, CRS.albers)  # standard albers projection for BC gov't data BCAlbers 
   
   tempPoly <- bec11[bec11$BGC_LABEL == BGC,]
