@@ -1,0 +1,48 @@
+---
+title: "BGC_Climate_Summaries"
+author: "William H MacKenzie"
+date: "17/10/2019"
+output: html_document
+---
+# R codes here are written to calculate climate summaries
+
+
+# STEP 1: Prepare dataset for analysis----
+# clear workspace
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list=ls())
+require(tidyverse)
+require(data.table)
+
+```
+
+#Choose file = Normal Period ClimateWNA output with BGC
+-- all variables time series 1901-latest
+
+```{r input data}
+a <-file.choose()
+mydata <- fread (a)
+fname <- basename(a)
+mydata <- rename(mydata, BGC = ID2)
+var.remove <- c("ID1","Latitude", "Longitude", "Elevation" )
+mydata2 <- select (mydata,-var.remove) # Drop Lat, Long, Elevation
+#mydata2[-1] <- lapply(mydata2[-1], as.numeric)
+#save(mydata2,file=paste("./inputs/",fname,".Rdata",sep="")) # save as an RDA for future applications
+#var.list <- c("BGC","MAT", "Tave_sm", "MAP", "MSP", "PAS", "CMD", "TD" ) # for BGC subzone designation
+var.list <- c("BGC", "DD5", "CMD", "Tmax_sm") # for SI50 calculations
+mydata3 <- select (mydata2, var.list) 
+```
+
+## Summarize normal period climate variables by BGC for a number of points
+
+```{r summarize by BGC, echo=FALSE}
+by_BGC <- mydata3 %>% 
+  group_by(BGC) %>% 
+  #summarize_all(list (~min(.), ~mean(.), ~max(.)), na.rm = TRUE)
+  summarize_all (~mean(.), na.rm = TRUE)
+by_BGC
+write.csv (by_BGC, "./outputs/Climate_Means_by_BGC_for_SI50.csv")
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
