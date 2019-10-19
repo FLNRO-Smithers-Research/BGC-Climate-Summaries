@@ -28,6 +28,7 @@ require(survey)
 require(fasterize)
 require(tibble)
 require(maptools)
+require(tictoc)
 ```
 
 ## Create Grid Points and Hex Raster for WNA
@@ -36,32 +37,36 @@ This grid will remain standardized but the BGC membership or climate data can be
 The next block will update the BGC membership of the 
 
 ```{r create Grid for WNA, echo=FALSE}
-
+tic()
 CRS.albers <- CRS ("+proj=aea +lat_1=50 +lat_2=58.5 +lat_0=45 +lon_0=-126 +x_0=1000000 +y_0=0 +datum=NAD83 +units=m +no_defs")
 CRS.NAD83 <- CRS("+init=epsg:4269")
 
 ### Read in the combined state boundary files for WNA
-WNA <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "WNA_Merge_States_WGS84")
-WNA <- st_read
-WNA_st <- st_sf(WNA)
+WNA <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "USA_States")#layer = "WNA_Merge_States_WGS84")
+#WNA <- read_sf("./inputs/SpatialFiles/BC_AB_US_Shp/WNA_Merge_States_WGS84.shp)
 # set projection
-WNA <- st_transform(WNA, CRS.albers)
+WNA <- spTransform(WNA, CRS.albers)
+#WNA <- st_transform(WNA, CRS.albers)
 ### Read in combine BGC layers
 BGC <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "BGCv11_AB_BGCs")
-BGC <- st_transform(BGC, CRS.albers)
+#BGC <- read_sf("./inputs/SpatialFiles/BC_AB_US_Shp/BGCv11_AB_BGCs.shp)
+BGC <- spTransform(BGC, CRS.albers)
+#BGC <- st_transform(BGC, CRS.albers)
 ### Reada in DEM for WNA and transform to NAD83
 WNA_DEM <- raster("./inputs/SpatialFiles/DEMs/WNA_DEM_clipped.tif")
 projection(WNA_DEM) <- CRS.NAD83
 
 ### set hex grid size here  
-size <- 4000
+size <- 1000
 #WNA_ext <- as(extent(WNA) + size, "SpatialPolygons")
   #projection(WNA_ext) <- projection(CRS.albers)
   p <- spsample(WNA, cellsize = c(size), type = "hexagonal",offset = c(0, 0))# type "regular" (need 2 sizes)
-#p <- st_sample(WNA, cellsize = c(size), type = "hexagonal",offset = c(0, 0))# type "regular" (need 2 sizes)
+#p <- st_sample(WNA, size = size, type = "hexagonal",offset = c(0, 0))# type "regular" (need 2 sizes)
 ####################
-  p2 <- spTransform(p, CRS.NAD83) #to lat long in NAD83
+  p2 <- spTransform(p, CRS.NAD83) # to lat long in NAD83
+  #p2 <- st_transform(p2, CRS.NAD83)
   coords <- p2@coords
+  #coords <- st_coordinates (p2)
   coords <- as.data.frame(coords)
   #extracts elevation for each point in p
   coords$elev <- raster::extract(WNA_DEM,p)
@@ -78,13 +83,17 @@ pnt_BGC <- over(p, BGC[,"BGC"],  minDimension = 1, returnList = FALSE)
   pnt_BGC <- as_tibble(rownames_to_column(pnt_BGC, var = "ID1"))
 pts.info <- left_join(pnt_BGC, pnt_state,  by = "ID1")
 pts.info <- left_join(pts.info, coords,  by = "ID1")
+pts.info <- pts.info %>% drop_na(State)
+#pts.info <- as.data.frame(pts.info)
    #  coords$BGC <- over(p,)
-write.csv (pts.info,  "./inputs/created/WNA_100km_Grid.csv", row.names = FALSE) 
- pts.spatial <- SpatialPointsDataFrame(pts.info[,4:5],
+pts.info2 <- pts.info %>% dplyr::select(ID1, State, latitude, longitude, elevation) #order for ClimateWNA
+write.csv (pts.info2,  "./inputs/created/USA_1km_Grid.csv", row.names = FALSE) 
+
+pts.spatial <- SpatialPointsDataFrame(pts.info[,4:5],
                     pts.info,    #the R object to convert
                     proj4string = CRS.NAD83)   # assign a CRS 
 
-  writeOGR (obj = pts.spatial, dsn = "./inputs/created/WNA_HexGrid_4k.shp", layer = "GridPoints", driver = "ESRI Shapefile", overwrite_layer = TRUE)
+  writeOGR (obj = pts.spatial, dsn = "./inputs/created/USA_HexGrid_1k.shp", layer = "GridPoints", driver = "ESRI Shapefile", overwrite_layer = TRUE)
   
     ###create a hex spatial polygons layer to match points
        hexs <- HexPoints2SpatialPolygons(p)
@@ -94,9 +103,10 @@ write.csv (pts.info,  "./inputs/created/WNA_100km_Grid.csv", row.names = FALSE)
         hexs <- SpatialPolygonsDataFrame(hexs, data=o)
         #hexs2 <- gIntersection(hexs, WNA, byid = TRUE)
         hexs <- spTransform(hexs, CRS.albers)
-        writeOGR (obj = hexs, dsn = "./inputs/created/WNA_HexPoly_4k.shp", 
+        writeOGR (obj = hexs, dsn = "./inputs/created/USA_HexPoly_1k.shp", 
                   layer = "HexPolyGrid", driver = "ESRI Shapefile", overwrite_layer = TRUE) 
-  # 
+ toc()
+         # 
 #   hexs <- HexPoints2SpatialPolygons(pts.spatial, 100000)
 #   hexs <- spTransform(hexs, CRS.albers)
 #   hexs2 <- SpatialPolygonsDataFrame(hexs, p1, match.ID = FALSE)
@@ -358,4 +368,37 @@ stdh_gridpol = function(sf,
     return(st_geometry(fin))
   }
 }
+
+hon <- stdh_gridpol(GB, to = "honeycomb", gridsize = 50 * 1000)
+hex <- stdh_gridpol(GB, to = "hexbin", gridsize = 50 * 1000)
+pix <- stdh_gridpol(WNA, to = "pixel", gridsize = 50 * 1000)
+```
+
+### From
+https://gist.github.com/rafapereirabr/e1b73de3b019f4623af09f7d8c697c79
+```{r new hex function}
+HexGrid <- function(mycellsize, originlpolygon) { 
+    
+  # Define size of hexagon bins in meters to create points
+  HexPts <- spsample(originlpolygon, type="hexagonal", offset=c(0,0), cellsize=mycellsize)
+  
+  # Create Grid - transform into spatial polygons
+  HexPols <- HexPoints2SpatialPolygons(HexPts)
+  
+  # convert to spatial polygon data frame
+  df <- data.frame(idhex = getSpPPolygonsIDSlots(HexPols))
+  row.names(df) <- getSpPPolygonsIDSlots(HexPols)
+  hexgrid <- SpatialPolygonsDataFrame(HexPols, data =df)
+  return(hexgrid)
+}
+
+
+###### 3: Create Hexagonal grid -------------------
+
+# 500 meters
+    hex_got <- HexGrid(100000, WNA)
+
+        writeOGR (obj = hex_got, dsn = "./inputs/created/test_HexGrid.shp", 
+                  layer = "HexGrid", driver = "ESRI Shapefile", overwrite_layer = TRUE)  
+
 ```
