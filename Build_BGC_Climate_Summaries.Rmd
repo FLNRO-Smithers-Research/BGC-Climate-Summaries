@@ -14,30 +14,67 @@ knitr::opts_chunk$set(echo = TRUE)
 rm(list=ls())
 require(tidyverse)
 require(data.table)
-
+require(sf)
+library(dplyr)
+library(rgdal)
+library(sp)
+library(raster)
+library(rgeos)
+library(maptools)
+library(magrittr)
+library(tibble)
+library(tidyr)
+library(sf)
+library(tcltk)
+library(foreach)
+library(httr)
+library(jsonlite)
+library(randomForest)
+library(data.table)
+require(survey)
+require(fasterize)
+require(tibble)
+require(maptools)
+require(tictoc)
 ```
 
 #Choose file = Normal Period ClimateWNA output with BGC
 -- all variables time series 1901-latest
 
-```{r input data}
-a <-file.choose()
-mydata <- fread (a)
-fname <- basename(a)
-mydata <- rename(mydata, BGC = ID2)
-var.remove <- c("ID1","Latitude", "Longitude", "Elevation" )
-mydata2 <- select (mydata,-var.remove) # Drop Lat, Long, Elevation
+```{r input data, echo=FALSE}
+CRS.albers <- CRS ("+proj=aea +lat_1=50 +lat_2=58.5 +lat_0=45 +lon_0=-126 +x_0=1000000 +y_0=0 +datum=NAD83 +units=m +no_defs")
+CRS.NAD83 <- CRS("+init=epsg:4269")
+
+a <-file.choose() #points file with climate data
+BGC <-file.choose()#spatial file of BGC
+
+mydata <- fread(a) #(read in CSV)
+mydata$lat <- mydata$Latitude
+mydata$long <- mydata$Longitude
+mydata2 <- mydata[mydata$State == "BC",] #limit locations to BC
+mydata_spatial <-  st_as_sf (mydata2, coords = c("Longitude", "Latitude"), crs = CRS.NAD83) %>% st_transform(CRS.albers)
+
+BGC_spatial <-  read_sf (BGC) %>% st_set_crs (CRS.albers)
+
+mydata3 <- st_join(mydata_spatial, BGC_spatial) %>% st_transform(CRS.NAD83)### add BGC variables to climate data
+mydata4 <- as.data.frame(mydata3)
+
+var.remove <- c("ID1","lat", "long", "Elevation", "geometry" )
+mydata5 <- dplyr::select (mydata4,-var.remove) # Drop Lat, Long, Elevation
 #mydata2[-1] <- lapply(mydata2[-1], as.numeric)
 #save(mydata2,file=paste("./inputs/",fname,".Rdata",sep="")) # save as an RDA for future applications
 #var.list <- c("BGC","MAT", "Tave_sm", "MAP", "MSP", "PAS", "CMD", "TD" ) # for BGC subzone designation
-var.list <- c("BGC", "DD5", "CMD", "Tmax_sm") # for SI50 calculations
-mydata3 <- select (mydata2, var.list) 
+var.list <- c("BGC", "CMD") # for SI50 calculations
+#mydata3 <- select (mydata2, var.list) 
+
+mydata6 <- mydata5 %>% dplyr:: select(var.list, starts_with("DD5"), starts_with("DD18"), starts_with("Tmax")) %>% drop_na()
+
 ```
 
 ## Summarize normal period climate variables by BGC for a number of points
 
 ```{r summarize by BGC, echo=FALSE}
-by_BGC <- mydata3 %>% 
+by_BGC <- mydata6 %>% 
   group_by(BGC) %>% 
   #summarize_all(list (~min(.), ~mean(.), ~max(.)), na.rm = TRUE)
   summarize_all (~mean(.), na.rm = TRUE)
