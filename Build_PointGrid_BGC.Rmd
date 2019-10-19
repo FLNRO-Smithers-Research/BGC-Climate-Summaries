@@ -27,9 +27,13 @@ library(data.table)
 require(survey)
 require(fasterize)
 require(tibble)
+require(maptools)
 ```
 
-## Create Grid Points with 
+## Create Grid Points and Hex Raster for WNA
+This block of code is to generate grids at 4k and 2k for analyses applied to the entire WNA study area.
+This grid will remain standardized but the BGC membership or climate data can be updated.
+The next block will update the BGC membership of the 
 
 ```{r create Grid for WNA, echo=FALSE}
 
@@ -38,18 +42,24 @@ CRS.NAD83 <- CRS("+init=epsg:4269")
 
 ### Read in the combined state boundary files for WNA
 WNA <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "WNA_Merge_States_WGS84")
+WNA <- st_read
+WNA_st <- st_sf(WNA)
 # set projection
-WNA <- spTransform(WNA, CRS.albers)
-
+WNA <- st_transform(WNA, CRS.albers)
 ### Read in combine BGC layers
-
+BGC <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "BGCv11_AB_BGCs")
+BGC <- st_transform(BGC, CRS.albers)
 ### Reada in DEM for WNA and transform to NAD83
 WNA_DEM <- raster("./inputs/SpatialFiles/DEMs/WNA_DEM_clipped.tif")
 projection(WNA_DEM) <- CRS.NAD83
 
-### set grid size here  
-size <- 1000
-  p <- spsample(WNA, cellsize = c(size), type = "hexagonal",offset = c(0, 0))# change this to change grid size and type regular (need 2 sizes)
+### set hex grid size here  
+size <- 4000
+#WNA_ext <- as(extent(WNA) + size, "SpatialPolygons")
+  #projection(WNA_ext) <- projection(CRS.albers)
+  p <- spsample(WNA, cellsize = c(size), type = "hexagonal",offset = c(0, 0))# type "regular" (need 2 sizes)
+#p <- st_sample(WNA, cellsize = c(size), type = "hexagonal",offset = c(0, 0))# type "regular" (need 2 sizes)
+####################
   p2 <- spTransform(p, CRS.NAD83) #to lat long in NAD83
   coords <- p2@coords
   coords <- as.data.frame(coords)
@@ -62,26 +72,107 @@ size <- 1000
 pnt_state <- over(p, WNA[,"State"],  minDimension = 1, returnList = FALSE) 
   pnt_state <- as_tibble(rownames_to_column(pnt_state, var = "ID1"))
 
-  #pnt_BGC <-   
-
-pts.info <- left_join(pnt_state, coords, by = "ID1")
  # overlay points over BGC boundaries
+BGC$BGC <- as.character(BGC$BGC)
+pnt_BGC <- over(p, BGC[,"BGC"],  minDimension = 1, returnList = FALSE) 
+  pnt_BGC <- as_tibble(rownames_to_column(pnt_BGC, var = "ID1"))
+pts.info <- left_join(pnt_BGC, pnt_state,  by = "ID1")
+pts.info <- left_join(pts.info, coords,  by = "ID1")
    #  coords$BGC <- over(p,)
-write.csv (pts.info,  "./inputs/created/WNA_1km_Grid.csv", row.names = FALSE) 
- pts.spatial <- SpatialPointsDataFrame(pts.info[,3:4],
+write.csv (pts.info,  "./inputs/created/WNA_100km_Grid.csv", row.names = FALSE) 
+ pts.spatial <- SpatialPointsDataFrame(pts.info[,4:5],
                     pts.info,    #the R object to convert
                     proj4string = CRS.NAD83)   # assign a CRS 
 
-  writeOGR (obj = pts.spatial, dsn = "./inputs/created/WNA_HexGrid_1k.shp", layer = "GridPoints", driver = "ESRI Shapefile", overwrite_layer = TRUE)
-
+  writeOGR (obj = pts.spatial, dsn = "./inputs/created/WNA_HexGrid_4k.shp", layer = "GridPoints", driver = "ESRI Shapefile", overwrite_layer = TRUE)
+  
+    ###create a hex spatial polygons layer to match points
+       hexs <- HexPoints2SpatialPolygons(p)
+        o <- as.data.frame(over(hexs, p))
+        #o <- as.data.frame(st_intersects(hexs, p))
+        row.names(o) <- row.names(hexs)
+        hexs <- SpatialPolygonsDataFrame(hexs, data=o)
+        #hexs2 <- gIntersection(hexs, WNA, byid = TRUE)
+        hexs <- spTransform(hexs, CRS.albers)
+        writeOGR (obj = hexs, dsn = "./inputs/created/WNA_HexPoly_4k.shp", 
+                  layer = "HexPolyGrid", driver = "ESRI Shapefile", overwrite_layer = TRUE) 
+  # 
+#   hexs <- HexPoints2SpatialPolygons(pts.spatial, 100000)
+#   hexs <- spTransform(hexs, CRS.albers)
+#   hexs2 <- SpatialPolygonsDataFrame(hexs, p1, match.ID = FALSE)
+#    writeOGR (obj = hexs2, dsn = "./inputs/created/WNA_HexPoly_100k.shp", layer = "HexPolyGrid", driver = "ESRI Shapefile", overwrite_layer = TRUE) 
 ```
 
-##Process for adding BGC to grid points
+##Build fine scale raster for USA_BGC build
+```{r create Grid for WNA, echo=FALSE}
+
+CRS.albers <- CRS ("+proj=aea +lat_1=50 +lat_2=58.5 +lat_0=45 +lon_0=-126 +x_0=1000000 +y_0=0 +datum=NAD83 +units=m +no_defs")
+CRS.NAD83 <- CRS("+init=epsg:4269")
+
+### Read in the combined state boundary files for WNA
+USA <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "USA_States")
+# set projection
+USA <- spTransform(WNA, CRS.albers)
+WNA_DEM <- raster("./inputs/SpatialFiles/DEMs/WNA_DEM_clipped.tif")
+projection(WNA_DEM) <- CRS.NAD83
+
+### set hex grid size here  
+size <- 500
+#WNA_ext <- as(extent(WNA) + size, "SpatialPolygons")
+  #projection(WNA_ext) <- projection(CRS.albers)
+  p <- spsample(USA, cellsize = c(size), type = "hexagonal",offset = c(0, 0))# type "regular" (need 2 sizes)
+
+####################
+  p2 <- spTransform(p, CRS.NAD83) #to lat long in NAD83
+  coords <- p2@coords
+  coords <- as.data.frame(coords)
+  #extracts elevation for each point in p
+  coords$elev <- raster::extract(WNA_DEM,p)
+  colnames(coords) <- c("longitude","latitude","elevation")
+  coords <- as_tibble(rownames_to_column(coords, var = "ID1"))
+  #overlay of points over administrative boundaries
+  USA$State <- as.character (USA$State)
+pnt_state <- over(p, USA[,"State"],  minDimension = 1, returnList = FALSE) 
+  pnt_state <- as_tibble(rownames_to_column(pnt_state, var = "ID1"))
+
+ # overlay points over BGC boundaries
+BGC$BGC <- as.character(BGC$BGC)
+pnt_BGC <- over(p, BGC[,"BGC"],  minDimension = 1, returnList = FALSE)
+  pnt_BGC <- as_tibble(rownames_to_column(pnt_BGC, var = "ID1"))
+pts.info <- left_join(pnt_BGC, pnt_state,  by = "ID1")
+pts.info <- left_join(pts.info, coords,  by = "ID1")
+ coords$BGC <- over(p,)
+write.csv (pts.info,  "./inputs/created/USA_500m_Grid.csv", row.names = FALSE) 
+ pts.spatial <- SpatialPointsDataFrame(pts.info[,4:5],
+                    pts.info,    #the R object to convert
+                    proj4string = CRS.NAD83)   # assign a CRS 
+
+  writeOGR (obj = pts.spatial, dsn = "./inputs/created/USA_HexGrid_500m.shp", layer = "GridPoints", driver = "ESRI Shapefile", overwrite_layer = TRUE)
+  
+  ###create a hex spatial polygons layer to match points
+       hexs <- HexPoints2SpatialPolygons(p)
+        o <- as.data.frame(over(hexs, p)) ### this function is too slow
+        row.names(o) <- row.names(hexs)
+        hexs <- SpatialPolygonsDataFrame(hexs, data=o)
+        #hexs2 <- gIntersection(hexs, WNA, byid = TRUE)
+        hexs <- spTransform(hexs, CRS.albers)
+        writeOGR (obj = hexs, dsn = "./inputs/created/USA_HexPoly_500m.shp", 
+                  layer = "HexPolyGrid", driver = "ESRI Shapefile", overwrite_layer = TRUE)   
+# 
+#   hexs <- HexPoints2SpatialPolygons(pts.spatial, 100000)
+#   hexs <- spTransform(hexs, CRS.albers)
+#   hexs2 <- SpatialPolygonsDataFrame(hexs, p1, match.ID = FALSE)
+#    writeOGR (obj = hexs2, dsn = "./inputs/created/WNA_HexPoly_100k.shp", layer = "HexPolyGrid", driver = "ESRI Shapefile", overwrite_layer = TRUE) 
+```
+
+
+
+
 
 ```{r overlay States, echo = FALSE} 
 ###for BC (input 4 km grid, output is just BC points with BGC assigned)
 grid <- fread("./inputs/created/WNA100km_Grid.csv", stringsAsFactors = FALSE, data.table = FALSE)
-BGC = "CWH ms 2"
+allUnits <- grid
 BCwBGC <- foreach(BGC = allUnits, .combine = rbind) %do%{
   dat <- grid4BC
   pointsOrig <- dat
@@ -148,7 +239,7 @@ make_hex <- function(x, cell_diameter, cell_area, clip = FALSE) {
   projection(ext) <- projection(x)
   # generate array of hexagon centers
   g2 <- spsample(ext, type = "hexagonal", cellsize = cell_diameter, 
-                offset = c(0.5, 0.5))
+                offset = c(0, 0))
   
      # convert center points to hexagons
   g2 <- HexPoints2SpatialPolygons(g2, dx = cell_diameter)
