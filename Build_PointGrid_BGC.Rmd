@@ -33,8 +33,8 @@ require(tictoc)
 
 ## Create Grid Points and Hex Raster for WNA
 This block of code is to generate grids at 4k and 2k for analyses applied to the entire WNA study area.
-This grid will remain standardized but the BGC membership or climate data can be updated.
-The next block will update the BGC membership of the 
+This grid will remain standardized but the BGC membership or climate data can be updated. 
+The Build_BGC_Climate_Summaries script will update the BGC membership of the grid
 
 ```{r create Grid for WNA, echo=FALSE}
 tic()
@@ -42,7 +42,7 @@ CRS.albers <- CRS ("+proj=aea +lat_1=50 +lat_2=58.5 +lat_0=45 +lon_0=-126 +x_0=1
 CRS.NAD83 <- CRS("+init=epsg:4269")
 
 ### Read in the combined state boundary files for WNA
-WNA <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "USA_States")#layer = "WNA_Merge_States_WGS84")
+WNA <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "WNA_Merge_States_WGS84")#layer = "USA_States"
 #WNA <- read_sf("./inputs/SpatialFiles/BC_AB_US_Shp/WNA_Merge_States_WGS84.shp)
 # set projection
 WNA <- spTransform(WNA, CRS.albers)
@@ -57,7 +57,7 @@ WNA_DEM <- raster("./inputs/SpatialFiles/DEMs/WNA_DEM_clipped.tif")
 projection(WNA_DEM) <- CRS.NAD83
 
 ### set hex grid size here  
-size <- 1000
+size <- 2000
 #WNA_ext <- as(extent(WNA) + size, "SpatialPolygons")
   #projection(WNA_ext) <- projection(CRS.albers)
   p <- spsample(WNA, cellsize = c(size), type = "hexagonal",offset = c(0, 0))# type "regular" (need 2 sizes)
@@ -113,12 +113,85 @@ pts.spatial <- SpatialPointsDataFrame(pts.info[,4:5],
 #    writeOGR (obj = hexs2, dsn = "./inputs/created/WNA_HexPoly_100k.shp", layer = "HexPolyGrid", driver = "ESRI Shapefile", overwrite_layer = TRUE) 
 ```
 
-##Build fine scale raster for USA_BGC build
+##Build fine scale hex raster for USA_BGC build
+
+Function from http://strimas.com/spatial/hexagonal-grids/
+Creates a hex grid. Use this function for USBGC map build
+x= polygon, cell
+
+````{r grid function}
+source("Function_make_HexGrid.R")
+
+CRS.albers <- CRS ("+proj=aea +lat_1=50 +lat_2=58.5 +lat_0=45 +lon_0=-126 +x_0=1000000 +y_0=0 +datum=NAD83 +units=m +no_defs")
+CRS.NAD83 <- CRS("+init=epsg:4269")
+
+### Read in the combined state boundary files for WNA
+USA <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "USA_States")
+USA <- spTransform(USA, CRS.albers)
+USA_buff <- gBuffer(USA, byid=FALSE, width = 1.1) ##expand size of USA to capture boundaries
+
+size <- 100000
+USA_BGC_pts <- make_grid(USA_buff, cell_diameter = size, clip = FALSE)
+#convert to SpatialPointsDataFrame
+  p <- data.frame (ID1 = 1 :length(USA_BGC_pts))
+        USA_BGC_pts2 <- SpatialPointsDataFrame(USA_BGC_pts, data = p)        
+writeOGR (obj = USA_BGC_pts2, dsn = "./inputs/created/USA_HexGrid_1k_new.shp", layer = "GridPoints", driver = "ESRI Shapefile", overwrite_layer = TRUE)
+         
+   p2 <- spTransform(USA_BGC_pts, CRS.NAD83) # to lat long in NAD83
+  coords <- p2@coords
+  coords <- as.data.frame(coords)
+WNA_DEM <- raster("./inputs/SpatialFiles/DEMs/WNA_DEM_clipped.tif")
+projection(WNA_DEM) <- CRS.NAD83
+    coords$elev <- raster::extract(WNA_DEM,p2)
+  colnames(coords) <- c("longitude","latitude","elevation")
+  coords <- as_tibble(rownames_to_column(coords, var = "ID1"))
+  #overlay of points over administrative boundaries
+  USA$State <- as.character (USA$State)
+  
+pnt_state <- over(USA_BGC_pts, USA[,"State"],  minDimension = 1, returnList = FALSE) 
+  pnt_state <- as_tibble(rownames_to_column(pnt_state, var = "ID1"))
+pts.info <- left_join(pnt_state, coords,  by = "ID1")
+pts.info2 <- pts.info %>% dplyr::select(ID1, State, latitude, longitude, elevation) #order for ClimateWNA
+write.csv (pts.info2,  "./inputs/created/USA_1km_Grid_Climate.csv", row.names = FALSE)         
+
+  
+  USA_BGC_hex <- make_hex (USA_buff, cell_diameter = size, clip = FALSE)
+#convert to SpatialPolygonsDataFrame
+  o <- data.frame (ID1 = 1 :length(USA_BGC_hex))
+        USA_BGC_hex2 <- SpatialPolygonsDataFrame(USA_BGC_hex, data = o)
+    writeOGR (obj = USA_BGC_hex2, dsn = "./inputs/created/USA_HexPoly_1k_new.shp", layer = "GridPoints", driver = "ESRI Shapefile", overwrite_layer = TRUE)
+
+  
+  # # without clipping
+# hex_grid <- make_grid(USA_BGC_hex, cell_area = 625, clip = FALSE)
+# plot(USA_BGC_hex, col = "grey50", bg = "light blue", axes = FALSE)
+# plot(hex_grid, border = "orange", add = TRUE)
+# box()
+# # with clipping
+# hex_grid <- make_grid(study_area_utm, cell_area = 625, clip = TRUE)
+# plot(study_area_utm, col = "grey50", bg = "light blue", axes = FALSE)
+# plot(hex_grid, border = "orange", add = TRUE)
+# box()
+```
+
+
 ```{r create Grid for WNA, echo=FALSE}
 
 CRS.albers <- CRS ("+proj=aea +lat_1=50 +lat_2=58.5 +lat_0=45 +lon_0=-126 +x_0=1000000 +y_0=0 +datum=NAD83 +units=m +no_defs")
 CRS.NAD83 <- CRS("+init=epsg:4269")
 
+USA <- "./inputs/SpatialFiles/BC_AB_US_Shp/USA_States.shp"#spatial file of BGC
+#mydata2 <- mydata[mydata$State == "BC",] #limit locations to BC
+USA_spatial <-  read_sf (USA) %>% st_set_crs (CRS.albers)
+
+USA_grid <- st_make_grid(USA_spatial, cellsize = 10*10)
+
+mydata3 <- st_join(mydata_spatial, BGC_spatial) %>% st_transform(CRS.NAD83)### add BGC variables to climate data
+mydata4 <- as.data.frame(mydata3) %>% drop_na("State")
+mydata4 <- mydata4 %>% dplyr::select("ID1", "State", "BGC", "lat", "long", "Elevation", everything())
+mydata4 <- mydata4[!(mydata$MAT == -9999.0),] # removes [points that are outside of climateBC model]
+write.csv(mydata4, a) ##replaces the orginal file
+save(mydata4,file=paste("./inputs/created/",fname,".Rdata",sep="")) # save as an RDA for future applications
 ### Read in the combined state boundary files for WNA
 USA <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "USA_States")
 # set projection
@@ -208,86 +281,7 @@ BC4kgrid2  <- BCwBGC [,c("ID1", "ID2","lat", "long", "el")]
 write.csv (BC4kgrid2, "BC1kmGrid_mapped_BGC2.csv", row.names = FALSE)
 ```
 
-Function from http://strimas.com/spatial/hexagonal-grids/
-Creates a hex grid. Use this function for USBGC map build
-x= polygon, cell
-````{r grid function}
-make_grid <- function(x, cell_diameter, cell_area, clip = FALSE) {
-  if (missing(cell_diameter)) {
-    if (missing(cell_area)) {
-      stop("Must provide cell_diameter or cell_area")
-    } else {
-      cell_diameter <- sqrt(2 * cell_area / sqrt(3))
-    }
-  }
-  ext <- as(extent(x) + cell_diameter, "SpatialPolygons")
-  projection(ext) <- projection(x)
-  # generate array of hexagon centers
-  g <- spsample(ext, type = "hexagonal", cellsize = cell_diameter, 
-                offset = c(0.5, 0.5))
-   # clip to boundary of study area
-  if (clip) {
-    g <- gIntersection(g, x, byid = TRUE)
-  } else {
-    g <- g[x, ]
-  }
-  # clean up feature IDs
-  row.names(g) <- as.character(1:length(g))
-   return(g)
-}
- 
-make_hex <- function(x, cell_diameter, cell_area, clip = FALSE) {
 
-    if (missing(cell_diameter)) {
-    if (missing(cell_area)) {
-      stop("Must provide cell_diameter or cell_area")
-    } else {
-      cell_diameter <- sqrt(2 * cell_area / sqrt(3))
-    }
-  }
-  ext <- as(extent(x) + cell_diameter, "SpatialPolygons")
-  projection(ext) <- projection(x)
-  # generate array of hexagon centers
-  g2 <- spsample(ext, type = "hexagonal", cellsize = cell_diameter, 
-                offset = c(0, 0))
-  
-     # convert center points to hexagons
-  g2 <- HexPoints2SpatialPolygons(g2, dx = cell_diameter)
-  # clip to boundary of study area
-  if (clip) {
-    g2 <- gIntersection(g2, x, byid = TRUE)
-  } else {
-    g2 <- g2[x, ]
-  }
-  # clean up feature IDs
-  row.names(g2) <- as.character(1:length(g2))
-  return(g2)
-}
-
-CRS.albers <- CRS ("+proj=aea +lat_1=50 +lat_2=58.5 +lat_0=45 +lon_0=-126 +x_0=1000000 +y_0=0 +datum=NAD83 +units=m +no_defs")
-CRS.NAD83 <- CRS("+init=epsg:4269")
-
-### Read in the combined state boundary files for WNA
-USA <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "USA_States")
-USA <- spTransform(USA, CRS.albers)
-size <- 100000
-USA_BGC_pts <- make_grid(USA, cell_diameter = size, clip = FALSE)
-USA_BGC_hex <- make_hex (USA, cell_diameter = size, clip = TRUE)
-
-
-
-
-# without clipping
-hex_grid <- make_grid(USA_BGC_NAD83, cell_area = 625, clip = FALSE)
-plot(USA_BGC_hex, col = "grey50", bg = "light blue", axes = FALSE)
-plot(hex_grid, border = "orange", add = TRUE)
-box()
-# with clipping
-hex_grid <- make_grid(study_area_utm, cell_area = 625, clip = TRUE)
-plot(study_area_utm, col = "grey50", bg = "light blue", axes = FALSE)
-plot(hex_grid, border = "orange", add = TRUE)
-box()
-```
 
 ## Function from  https://dieghernan.github.io/201906_Beautiful1/
 
@@ -369,7 +363,7 @@ stdh_gridpol = function(sf,
   }
 }
 
-hon <- stdh_gridpol(GB, to = "honeycomb", gridsize = 50 * 1000)
+hon <- stdh_gridpol(USA_spatial, to = "honeycomb", gridsize = 50 * 1000)
 hex <- stdh_gridpol(GB, to = "hexbin", gridsize = 50 * 1000)
 pix <- stdh_gridpol(WNA, to = "pixel", gridsize = 50 * 1000)
 ```
