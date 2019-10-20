@@ -15,7 +15,7 @@ if(grepl(".csv", a)==TRUE){mydata=read.csv(a,stringsAsFactors=FALSE,na.strings="
 } else if(grepl(".RData",a)|grepl(".Rda",a)==TRUE){load(a)} # .RData
 fname= basename(a)
 
-#save(mydata,file=paste(fname,".Rda",sep="")) # save as an RDA for future applications
+save(mydata,file=paste("./inputs/",fname,".Rdata",sep="")) # save as an RDA for future applications
 
 # Name project and set working directory
 #fname="BGC99_Climate_Summaries"
