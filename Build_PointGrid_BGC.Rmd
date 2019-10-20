@@ -39,50 +39,33 @@ The Build_BGC_Climate_Summaries script will update the BGC membership of the gri
 ```{r create Grid for WNA, echo=FALSE}
 tic()
 CRS.albers <- CRS ("+proj=aea +lat_1=50 +lat_2=58.5 +lat_0=45 +lon_0=-126 +x_0=1000000 +y_0=0 +datum=NAD83 +units=m +no_defs")
-<<<<<<< HEAD
 CRS.NAD83 <- CRS("+init=epsg:4269")
 
 ### Read in the combined state boundary files for WNA
 WNA <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "WNA_Merge_States_WGS84")#layer = "USA_States"
-#WNA <- read_sf("./inputs/SpatialFiles/BC_AB_US_Shp/WNA_Merge_States_WGS84.shp)
 # set projection
 WNA <- spTransform(WNA, CRS.albers)
-#WNA <- st_transform(WNA, CRS.albers)
 ### Read in combine BGC layers
 BGC <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "BGCv11_AB_BGCs")
-#BGC <- read_sf("./inputs/SpatialFiles/BC_AB_US_Shp/BGCv11_AB_BGCs.shp)
 BGC <- spTransform(BGC, CRS.albers)
-#BGC <- st_transform(BGC, CRS.albers)
-=======
+
 ####set projection to NAD83
 CRS.NAD83 <- CRS("+init=epsg:4269")
-# BC <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "ProvincialOutline")
-# AB <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "AlbertaSubRegions_Albers")
-# US <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "USA_States")
+
 ### Read in the combined state boundary files for WNA
 WNA <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "WNA_Merge_States")
-# BC <- spTransform(BC, CRS.albers)
-# AB <- spTransform(AB, CRS.albers)
-# US <- spTransform(US, CRS.albers)
-# set projection
 WNA <- spTransform(WNA, CRS.albers)
->>>>>>> 5ee43eec53ceadfef9692df2ce0d5ca0ddc7a3ee
 ### Reada in DEM for WNA and transform to NAD83
 WNA_DEM <- raster("./inputs/SpatialFiles/DEMs/WNA_DEM_clipped.tif")
 projection(WNA_DEM) <- CRS.NAD83
 
-<<<<<<< HEAD
 ### set hex grid size here  
 size <- 2000
-#WNA_ext <- as(extent(WNA) + size, "SpatialPolygons")
-  #projection(WNA_ext) <- projection(CRS.albers)
   p <- spsample(WNA, cellsize = c(size), type = "hexagonal",offset = c(0, 0))# type "regular" (need 2 sizes)
-#p <- st_sample(WNA, size = size, type = "hexagonal",offset = c(0, 0))# type "regular" (need 2 sizes)
-####################
-  p2 <- spTransform(p, CRS.NAD83) # to lat long in NAD83
-  #p2 <- st_transform(p2, CRS.NAD83)
+
+  p2 <- spTransform(p, CRS.NAD83) # albers to lat long in NAD83
+
   coords <- p2@coords
-  #coords <- st_coordinates (p2)
   coords <- as.data.frame(coords)
   #extracts elevation for each point in p
   coords$elev <- raster::extract(WNA_DEM,p)
@@ -100,10 +83,9 @@ pnt_BGC <- over(p, BGC[,"BGC"],  minDimension = 1, returnList = FALSE)
 pts.info <- left_join(pnt_BGC, pnt_state,  by = "ID1")
 pts.info <- left_join(pts.info, coords,  by = "ID1")
 pts.info <- pts.info %>% drop_na(State)
-#pts.info <- as.data.frame(pts.info)
-   #  coords$BGC <- over(p,)
-pts.info2 <- pts.info %>% dplyr::select(ID1, State, latitude, longitude, elevation) #order for ClimateWNA
-write.csv (pts.info2,  "./inputs/created/USA_1km_Grid.csv", row.names = FALSE) 
+
+pts.info2 <- pts.info %>% dplyr::select(ID1, State, latitude, longitude, elevation) #variable order for ClimateWNA
+write.csv (pts.info2,  "./inputs/created/USA_1km_Grid.csv", row.names = FALSE) ### this file to be submitted to ClimateWNA
 
 pts.spatial <- SpatialPointsDataFrame(pts.info[,4:5],
                     pts.info,    #the R object to convert
@@ -122,75 +104,7 @@ pts.spatial <- SpatialPointsDataFrame(pts.info[,4:5],
         writeOGR (obj = hexs, dsn = "./inputs/created/USA_HexPoly_1k.shp", 
                   layer = "HexPolyGrid", driver = "ESRI Shapefile", overwrite_layer = TRUE) 
  toc()
-         # 
-#   hexs <- HexPoints2SpatialPolygons(pts.spatial, 100000)
-#   hexs <- spTransform(hexs, CRS.albers)
-#   hexs2 <- SpatialPolygonsDataFrame(hexs, p1, match.ID = FALSE)
-#    writeOGR (obj = hexs2, dsn = "./inputs/created/WNA_HexPoly_100k.shp", layer = "HexPolyGrid", driver = "ESRI Shapefile", overwrite_layer = TRUE) 
-=======
-# BCdem <- raster("./inputs/SpatialFiles/bc25fill")
-#writeRaster(BCdem, filename = "./inputs/SpatialFiles/BC_DEM.tif")
-###combine alberta and US DEMs
-# ABdem <- raster("./inputs/SpatialFiles/DEMs/AlbertaDEM.tif")
-# USdem1 <- raster("./inputs/SpatialFiles/DEMs/USA_WestDEM.tif")
-# USdem2 <- raster("./inputs/SpatialFiles/DEMs/USA_WestCoastDEM.tif")
-# USdem <- raster::merge(USdem1,USdem2)
-# allDEM <- raster::merge(ABdem,USdem) # not possible to merge BC with rasters due to different resolutions
-# writeRaster(allDEM, filename = "./inputs/SpatialFiles/USA_AB_DEM.tif")
-#allDEM <- raster("USA_AB_DEM.tif")
 
-#####Loop through BC, Alberta, and US to create grid
-# names <- c(BC, AB, US) # spatial file variables from above
-# i <- 0 
-#c("AlbertaSubRegions", "USA_States")
-# grid4k <- foreach(X = names, .combine = rbind) %do% {
-#   i <- i+1
-
- # shp <- spTransform(shp, CRS.albers)
-### set grid size here  
-size <- 100000
-  p <- spsample(WNA, cellsize = c(size), type = "hexagonal")# change this to change grid size and type regular (need 2 sizes)
-  p2 <- spTransform(p, CRS.NAD83) #to lat long in NAD83
-  coords <- p2@coords
-  coords <- as.data.frame(coords)
-  
-  
-  dem <- WNA_DEM
-  
-
-  #if(i == 1){
-   # dem <- BCdem
-  #}else{
-  #  dem <- allDEM
- # }
- # p <- spTransform(p, CRS(proj4string(dem)))
-  coords$elev <- raster::extract(WNA_DEM,p)
-  colnames(coords) <- c("longitude","latitude","elevation")
-  coords$state <- over(p, WNA [,"State"])
-  coords$BGC <- over(p,)
-  Grid.States <- st_join(p2, WNA2, join = st_intersects)
-  Grid.BGC <- st_join 
-  state.raster <- rasterize (WNA, WNA_DEM, "State")
-  # region <- X$STATE
-  # coords$Region <- X$STATE
-  grid4k <- coords
-#}
-
-rownames(grid4k) <- NULL
-setDT(grid4k, keep.rownames = TRUE)[]
-#grid4k <-grid4k[,c("rn", "lat", "long", "el")]
-grid4k <- grid4k[grid4k$el >0,]
-#grid4US <- grid4US[grid4US$el >0,]
-# grid4BC <- grid4k[grid4k$Region == "BC",]
-# grid4USAB <- grid4k[grid4k$Region != "BC",]
-# grid4USAB <- grid4USAB[grid4USAB$lat >= 37,]
-# grid4USAB <- grid4USAB[grid4USAB$long <= -104,]
-# grid4US <-grid4USAB[grid4USAB$Region != "AB",]
-# write.csv (grid4k, "BC_AB_US4kmGrid.csv", row.names = FALSE)
-# write.csv(grid4BC, "BC1kmGrid.csv", row.names = FALSE)
-# write.csv(grid4USAB,"US_AB4kmGrid.csv", row.names = FALSE)
-write.csv (grid4k,  "./inputs/created/WNA100km_Grid.csv", row.names = FALSE)
->>>>>>> 5ee43eec53ceadfef9692df2ce0d5ca0ddc7a3ee
 ```
 
 ##Build fine scale hex raster for USA_BGC build
@@ -212,11 +126,13 @@ USA_buff <- gBuffer(USA, byid=FALSE, width = 1.1) ##expand size of USA to captur
 
 size <- 800
 USA_BGC_pts <- make_grid(USA_buff, cell_diameter = size, clip = FALSE)
-#convert to SpatialPointsDataFrame
+#convert to SpatialPointsDataFrame and write shape file
   p <- data.frame (ID1 = 1 :length(USA_BGC_pts))
-        USA_BGC_pts2 <- SpatialPointsDataFrame(USA_BGC_pts, data = p)        
-writeOGR (obj = USA_BGC_pts2, dsn = "./inputs/created/USA_HexGrid_1k_new.shp", layer = "GridPoints", driver = "ESRI Shapefile", overwrite_layer = TRUE)
-         
+USA_BGC_pts2 <- SpatialPointsDataFrame(USA_BGC_pts, data = p)        
+
+writeOGR (obj = USA_BGC_pts2, dsn = "./inputs/created/USA_HexGrid_1k_new.shp", 
+          layer = "GridPoints", driver = "ESRI Shapefile", overwrite_layer = TRUE)
+#create CSV output for ClimateBC        
    p2 <- spTransform(USA_BGC_pts, CRS.NAD83) # to lat long in NAD83
   coords <- p2@coords
   coords <- as.data.frame(coords)
@@ -241,125 +157,10 @@ write.csv (pts.info2,  "./inputs/created/USA_1km_Grid_Climate.csv", row.names = 
         USA_BGC_hex2 <- SpatialPolygonsDataFrame(USA_BGC_hex, data = o)
     writeOGR (obj = USA_BGC_hex2, dsn = "./inputs/created/USA_HexPoly_1k_new.shp", layer = "HexPolys", driver = "ESRI Shapefile", overwrite_layer = TRUE)
 
-  
-  # # without clipping
-# hex_grid <- make_grid(USA_BGC_hex, cell_area = 625, clip = FALSE)
-# plot(USA_BGC_hex, col = "grey50", bg = "light blue", axes = FALSE)
-# plot(hex_grid, border = "orange", add = TRUE)
-# box()
-# # with clipping
-# hex_grid <- make_grid(study_area_utm, cell_area = 625, clip = TRUE)
-# plot(study_area_utm, col = "grey50", bg = "light blue", axes = FALSE)
-# plot(hex_grid, border = "orange", add = TRUE)
-# box()
+
 ```
 
 
-```{r create Grid for WNA, echo=FALSE}
-
-CRS.albers <- CRS ("+proj=aea +lat_1=50 +lat_2=58.5 +lat_0=45 +lon_0=-126 +x_0=1000000 +y_0=0 +datum=NAD83 +units=m +no_defs")
-CRS.NAD83 <- CRS("+init=epsg:4269")
-
-USA <- "./inputs/SpatialFiles/BC_AB_US_Shp/USA_States.shp"#spatial file of BGC
-#mydata2 <- mydata[mydata$State == "BC",] #limit locations to BC
-USA_spatial <-  read_sf (USA) %>% st_set_crs (CRS.albers)
-
-USA_grid <- st_make_grid(USA_spatial, cellsize = 10*10)
-
-mydata3 <- st_join(mydata_spatial, BGC_spatial) %>% st_transform(CRS.NAD83)### add BGC variables to climate data
-mydata4 <- as.data.frame(mydata3) %>% drop_na("State")
-mydata4 <- mydata4 %>% dplyr::select("ID1", "State", "BGC", "lat", "long", "Elevation", everything())
-mydata4 <- mydata4[!(mydata$MAT == -9999.0),] # removes [points that are outside of climateBC model]
-write.csv(mydata4, a) ##replaces the orginal file
-save(mydata4,file=paste("./inputs/created/",fname,".Rdata",sep="")) # save as an RDA for future applications
-### Read in the combined state boundary files for WNA
-USA <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "USA_States")
-# set projection
-USA <- spTransform(WNA, CRS.albers)
-WNA_DEM <- raster("./inputs/SpatialFiles/DEMs/WNA_DEM_clipped.tif")
-projection(WNA_DEM) <- CRS.NAD83
-
-### set hex grid size here  
-size <- 500
-#WNA_ext <- as(extent(WNA) + size, "SpatialPolygons")
-  #projection(WNA_ext) <- projection(CRS.albers)
-  p <- spsample(USA, cellsize = c(size), type = "hexagonal",offset = c(0, 0))# type "regular" (need 2 sizes)
-
-####################
-  p2 <- spTransform(p, CRS.NAD83) #to lat long in NAD83
-  coords <- p2@coords
-  coords <- as.data.frame(coords)
-  #extracts elevation for each point in p
-  coords$elev <- raster::extract(WNA_DEM,p)
-  colnames(coords) <- c("longitude","latitude","elevation")
-  coords <- as_tibble(rownames_to_column(coords, var = "ID1"))
-  #overlay of points over administrative boundaries
-  USA$State <- as.character (USA$State)
-pnt_state <- over(p, USA[,"State"],  minDimension = 1, returnList = FALSE) 
-  pnt_state <- as_tibble(rownames_to_column(pnt_state, var = "ID1"))
-
- # overlay points over BGC boundaries
-BGC$BGC <- as.character(BGC$BGC)
-pnt_BGC <- over(p, BGC[,"BGC"],  minDimension = 1, returnList = FALSE)
-  pnt_BGC <- as_tibble(rownames_to_column(pnt_BGC, var = "ID1"))
-pts.info <- left_join(pnt_BGC, pnt_state,  by = "ID1")
-pts.info <- left_join(pts.info, coords,  by = "ID1")
- coords$BGC <- over(p,)
-write.csv (pts.info,  "./inputs/created/USA_500m_Grid.csv", row.names = FALSE) 
- pts.spatial <- SpatialPointsDataFrame(pts.info[,4:5],
-                    pts.info,    #the R object to convert
-                    proj4string = CRS.NAD83)   # assign a CRS 
-
-  writeOGR (obj = pts.spatial, dsn = "./inputs/created/USA_HexGrid_500m.shp", layer = "GridPoints", driver = "ESRI Shapefile", overwrite_layer = TRUE)
-  
-  ###create a hex spatial polygons layer to match points
-       hexs <- HexPoints2SpatialPolygons(p)
-        o <- as.data.frame(over(hexs, p)) ### this function is too slow
-        row.names(o) <- row.names(hexs)
-        hexs <- SpatialPolygonsDataFrame(hexs, data=o)
-        #hexs2 <- gIntersection(hexs, WNA, byid = TRUE)
-        hexs <- spTransform(hexs, CRS.albers)
-        writeOGR (obj = hexs, dsn = "./inputs/created/USA_HexPoly_500m.shp", 
-                  layer = "HexPolyGrid", driver = "ESRI Shapefile", overwrite_layer = TRUE)   
-# 
-#   hexs <- HexPoints2SpatialPolygons(pts.spatial, 100000)
-#   hexs <- spTransform(hexs, CRS.albers)
-#   hexs2 <- SpatialPolygonsDataFrame(hexs, p1, match.ID = FALSE)
-#    writeOGR (obj = hexs2, dsn = "./inputs/created/WNA_HexPoly_100k.shp", layer = "HexPolyGrid", driver = "ESRI Shapefile", overwrite_layer = TRUE) 
-```
-
-
-
-
-
-```{r overlay States, echo = FALSE} 
-###for BC (input 4 km grid, output is just BC points with BGC assigned)
-grid <- fread("./inputs/created/WNA100km_Grid.csv", stringsAsFactors = FALSE, data.table = FALSE)
-allUnits <- grid
-BCwBGC <- foreach(BGC = allUnits, .combine = rbind) %do%{
-  dat <- grid4BC
-  pointsOrig <- dat
-  coordinates(dat) <- c("long", "lat")
-  #proj4string(dat) <- CRS("+proj=aea +lat_1=50 +lat_2=58.5 +lat_0=45 +lon_0=-126 +x_0=1000000 +y_0=0 +datum=NAD83 +units=m +no_defs")
-  #proj4string(dat) <- CRS("+init=epsg:4326") ##WGS84
-  proj4string(dat) <- CRS("+init=epsg:4269") ##NAD83
-  dat <- spTransform(dat, CRS.albers)  # standard albers projection for BC gov't data BCAlbers 
-  
-  tempPoly <- bec11[bec11$BGC_LABEL == BGC,]
-  tempPoly <- as(tempPoly, "Spatial") ##conver to sp
-  tempPoly <- spTransform(tempPoly, CRS.albers) 
-  dat <- over(dat, tempPoly) ###which ones are inside the BGC
-  pointsOrig <- pointsOrig[!is.na(dat$BGC_LABEL),] ###Remove points not inside BGC
-  if(nrow(pointsOrig) > 0){ ###check that some points fall inside BGC
-    pointsOrig$BGC <- BGC
-    pointsOrig
-  }
-}
- BCwBGC$ID1 <-row.names(BCwBGC)
-colnames(BCwBGC)[6] <- "ID2"
-BC4kgrid2  <- BCwBGC [,c("ID1", "ID2","lat", "long", "el")]
-write.csv (BC4kgrid2, "BC1kmGrid_mapped_BGC2.csv", row.names = FALSE)
-```
 
 
 
