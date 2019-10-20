@@ -47,47 +47,60 @@ CRS.NAD83 <- CRS("+init=epsg:4269")
 
 a <-file.choose() #points file with climate data
 BGC <-file.choose()#spatial file of BGC
-
+fname <-basename(a)
 mydata <- fread(a) #(read in CSV)
 mydata$lat <- mydata$Latitude
 mydata$long <- mydata$Longitude
-mydata2 <- mydata[mydata$State == "BC",] #limit locations to BC
-mydata_spatial <-  st_as_sf (mydata2, coords = c("Longitude", "Latitude"), crs = CRS.NAD83) %>% st_transform(CRS.albers)
+#mydata2 <- mydata[mydata$State == "BC",] #limit locations to BC
+mydata_spatial <-  st_as_sf (mydata, coords = c("Longitude", "Latitude"), crs = CRS.NAD83) %>% st_transform(CRS.albers)
 
 BGC_spatial <-  read_sf (BGC) %>% st_set_crs (CRS.albers)
 
 mydata3 <- st_join(mydata_spatial, BGC_spatial) %>% st_transform(CRS.NAD83)### add BGC variables to climate data
-mydata4 <- as.data.frame(mydata3)
+mydata4 <- as.data.frame(mydata3) %>% drop_na("State")
+mydata4 <- mydata4 %>% dplyr::select("ID1", "State", "BGC", "lat", "long", "Elevation", everything())
+mydata4 <- mydata4[!(mydata4$MAT == -9999.0),] # removes [points that are outside of climateBC model]
+write.csv(mydata4, a) ##replaces the orginal file
+save(mydata4,file=paste0("./outputs/",fname,".Rdata",sep="")) # save as an RDA for future applications
+
+
+```
+
+ ## Summarize normal period climate variables by BGC for a number of points
+
+```{r summarize by BGC, echo=FALSE}
+#read in an existing dataset
 
 var.remove <- c("ID1","lat", "long", "Elevation", "geometry" )
 mydata5 <- dplyr::select (mydata4,-var.remove) # Drop Lat, Long, Elevation
 #mydata2[-1] <- lapply(mydata2[-1], as.numeric)
-#save(mydata2,file=paste("./inputs/",fname,".Rdata",sep="")) # save as an RDA for future applications
+
 #var.list <- c("BGC","MAT", "Tave_sm", "MAP", "MSP", "PAS", "CMD", "TD" ) # for BGC subzone designation
 var.list <- c("CMD", "DD5") # for SI50 calculations
 #mydata3 <- select (mydata2, var.list) 
 
 mydata6 <- mydata5 %>% dplyr:: select("BGC",var.list, starts_with("DD5"), starts_with("DD18"), starts_with("Tmax")) %>% drop_na()
-
-```
-
-## Summarize normal period climate variables by BGC for a number of points
-
-```{r summarize by BGC, echo=FALSE}
-pts_BGC <- mydata6 %>% 
+pts_BGC <- mydata4 %>% 
   group_by(BGC) %>% summarize (n = n() , na.rm = TRUE)
+pts_BGC
+
 ### summarize by select list of variables
-BGC_climate <- mydata5 %>% 
+BGC_climate <- mydata4 %>% 
   group_by(BGC) %>% summarize_at(vars(var.list) , funs(mean, sd),na.rm = TRUE)
 
 ###summarize by all variables in a reduced variable data set
  BGC_climate <- mydata6 %>% 
    group_by(BGC) %>%
-   summarize_all(list (~mean(.), ~min(.), ~max(.)), na.rm = TRUE)
-
+   #summarize_all(list (~mean(.), ~min(.), ~max(.)), na.rm = TRUE)
+summarize_all(list (~mean(.), na.rm = TRUE))
 BGC.list <- as.list(mydata6$BGC)
 BGC.count <- mydata6 [,lapply(length), by = BGC]
-write.csv (by_BGC, "./outputs/Climate_Means_by_BGC_for_SI50.csv")
+write.csv (by_BGC, "./outputs/WNA_Climate_Means_by_BGC_from_4Km.csv")
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+##Plot variables by BGC
+
+```{r plots of variables}
+
+```
