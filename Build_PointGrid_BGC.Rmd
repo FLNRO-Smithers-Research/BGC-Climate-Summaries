@@ -130,7 +130,7 @@ USA <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "USA_States")
 USA <- spTransform(USA, CRS.albers)
 USA_buff <- gBuffer(USA, byid=FALSE, width = 1.1) ##expand size of USA to capture boundaries
 
-size <- 100000
+size <- 800
 USA_BGC_pts <- make_grid(USA_buff, cell_diameter = size, clip = FALSE)
 #convert to SpatialPointsDataFrame
   p <- data.frame (ID1 = 1 :length(USA_BGC_pts))
@@ -159,7 +159,7 @@ write.csv (pts.info2,  "./inputs/created/USA_1km_Grid_Climate.csv", row.names = 
 #convert to SpatialPolygonsDataFrame
   o <- data.frame (ID1 = 1 :length(USA_BGC_hex))
         USA_BGC_hex2 <- SpatialPolygonsDataFrame(USA_BGC_hex, data = o)
-    writeOGR (obj = USA_BGC_hex2, dsn = "./inputs/created/USA_HexPoly_1k_new.shp", layer = "GridPoints", driver = "ESRI Shapefile", overwrite_layer = TRUE)
+    writeOGR (obj = USA_BGC_hex2, dsn = "./inputs/created/USA_HexPoly_1k_new.shp", layer = "HexPolys", driver = "ESRI Shapefile", overwrite_layer = TRUE)
 
   
   # # without clipping
