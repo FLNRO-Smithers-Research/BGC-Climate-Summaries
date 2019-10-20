@@ -39,6 +39,7 @@ The Build_BGC_Climate_Summaries script will update the BGC membership of the gri
 ```{r create Grid for WNA, echo=FALSE}
 tic()
 CRS.albers <- CRS ("+proj=aea +lat_1=50 +lat_2=58.5 +lat_0=45 +lon_0=-126 +x_0=1000000 +y_0=0 +datum=NAD83 +units=m +no_defs")
+<<<<<<< HEAD
 CRS.NAD83 <- CRS("+init=epsg:4269")
 
 ### Read in the combined state boundary files for WNA
@@ -52,10 +53,25 @@ BGC <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "BGCv11_AB_BG
 #BGC <- read_sf("./inputs/SpatialFiles/BC_AB_US_Shp/BGCv11_AB_BGCs.shp)
 BGC <- spTransform(BGC, CRS.albers)
 #BGC <- st_transform(BGC, CRS.albers)
+=======
+####set projection to NAD83
+CRS.NAD83 <- CRS("+init=epsg:4269")
+# BC <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "ProvincialOutline")
+# AB <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "AlbertaSubRegions_Albers")
+# US <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "USA_States")
+### Read in the combined state boundary files for WNA
+WNA <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "WNA_Merge_States")
+# BC <- spTransform(BC, CRS.albers)
+# AB <- spTransform(AB, CRS.albers)
+# US <- spTransform(US, CRS.albers)
+# set projection
+WNA <- spTransform(WNA, CRS.albers)
+>>>>>>> 5ee43eec53ceadfef9692df2ce0d5ca0ddc7a3ee
 ### Reada in DEM for WNA and transform to NAD83
 WNA_DEM <- raster("./inputs/SpatialFiles/DEMs/WNA_DEM_clipped.tif")
 projection(WNA_DEM) <- CRS.NAD83
 
+<<<<<<< HEAD
 ### set hex grid size here  
 size <- 2000
 #WNA_ext <- as(extent(WNA) + size, "SpatialPolygons")
@@ -111,6 +127,70 @@ pts.spatial <- SpatialPointsDataFrame(pts.info[,4:5],
 #   hexs <- spTransform(hexs, CRS.albers)
 #   hexs2 <- SpatialPolygonsDataFrame(hexs, p1, match.ID = FALSE)
 #    writeOGR (obj = hexs2, dsn = "./inputs/created/WNA_HexPoly_100k.shp", layer = "HexPolyGrid", driver = "ESRI Shapefile", overwrite_layer = TRUE) 
+=======
+# BCdem <- raster("./inputs/SpatialFiles/bc25fill")
+#writeRaster(BCdem, filename = "./inputs/SpatialFiles/BC_DEM.tif")
+###combine alberta and US DEMs
+# ABdem <- raster("./inputs/SpatialFiles/DEMs/AlbertaDEM.tif")
+# USdem1 <- raster("./inputs/SpatialFiles/DEMs/USA_WestDEM.tif")
+# USdem2 <- raster("./inputs/SpatialFiles/DEMs/USA_WestCoastDEM.tif")
+# USdem <- raster::merge(USdem1,USdem2)
+# allDEM <- raster::merge(ABdem,USdem) # not possible to merge BC with rasters due to different resolutions
+# writeRaster(allDEM, filename = "./inputs/SpatialFiles/USA_AB_DEM.tif")
+#allDEM <- raster("USA_AB_DEM.tif")
+
+#####Loop through BC, Alberta, and US to create grid
+# names <- c(BC, AB, US) # spatial file variables from above
+# i <- 0 
+#c("AlbertaSubRegions", "USA_States")
+# grid4k <- foreach(X = names, .combine = rbind) %do% {
+#   i <- i+1
+
+ # shp <- spTransform(shp, CRS.albers)
+### set grid size here  
+size <- 100000
+  p <- spsample(WNA, cellsize = c(size), type = "hexagonal")# change this to change grid size and type regular (need 2 sizes)
+  p2 <- spTransform(p, CRS.NAD83) #to lat long in NAD83
+  coords <- p2@coords
+  coords <- as.data.frame(coords)
+  
+  
+  dem <- WNA_DEM
+  
+
+  #if(i == 1){
+   # dem <- BCdem
+  #}else{
+  #  dem <- allDEM
+ # }
+ # p <- spTransform(p, CRS(proj4string(dem)))
+  coords$elev <- raster::extract(WNA_DEM,p)
+  colnames(coords) <- c("longitude","latitude","elevation")
+  coords$state <- over(p, WNA [,"State"])
+  coords$BGC <- over(p,)
+  Grid.States <- st_join(p2, WNA2, join = st_intersects)
+  Grid.BGC <- st_join 
+  state.raster <- rasterize (WNA, WNA_DEM, "State")
+  # region <- X$STATE
+  # coords$Region <- X$STATE
+  grid4k <- coords
+#}
+
+rownames(grid4k) <- NULL
+setDT(grid4k, keep.rownames = TRUE)[]
+#grid4k <-grid4k[,c("rn", "lat", "long", "el")]
+grid4k <- grid4k[grid4k$el >0,]
+#grid4US <- grid4US[grid4US$el >0,]
+# grid4BC <- grid4k[grid4k$Region == "BC",]
+# grid4USAB <- grid4k[grid4k$Region != "BC",]
+# grid4USAB <- grid4USAB[grid4USAB$lat >= 37,]
+# grid4USAB <- grid4USAB[grid4USAB$long <= -104,]
+# grid4US <-grid4USAB[grid4USAB$Region != "AB",]
+# write.csv (grid4k, "BC_AB_US4kmGrid.csv", row.names = FALSE)
+# write.csv(grid4BC, "BC1kmGrid.csv", row.names = FALSE)
+# write.csv(grid4USAB,"US_AB4kmGrid.csv", row.names = FALSE)
+write.csv (grid4k,  "./inputs/created/WNA100km_Grid.csv", row.names = FALSE)
+>>>>>>> 5ee43eec53ceadfef9692df2ce0d5ca0ddc7a3ee
 ```
 
 ##Build fine scale hex raster for USA_BGC build
