@@ -64,21 +64,29 @@ mydata5 <- dplyr::select (mydata4,-var.remove) # Drop Lat, Long, Elevation
 #mydata2[-1] <- lapply(mydata2[-1], as.numeric)
 #save(mydata2,file=paste("./inputs/",fname,".Rdata",sep="")) # save as an RDA for future applications
 #var.list <- c("BGC","MAT", "Tave_sm", "MAP", "MSP", "PAS", "CMD", "TD" ) # for BGC subzone designation
-var.list <- c("BGC", "CMD") # for SI50 calculations
+var.list <- c("CMD", "DD5") # for SI50 calculations
 #mydata3 <- select (mydata2, var.list) 
 
-mydata6 <- mydata5 %>% dplyr:: select(var.list, starts_with("DD5"), starts_with("DD18"), starts_with("Tmax")) %>% drop_na()
+mydata6 <- mydata5 %>% dplyr:: select("BGC",var.list, starts_with("DD5"), starts_with("DD18"), starts_with("Tmax")) %>% drop_na()
 
 ```
 
 ## Summarize normal period climate variables by BGC for a number of points
 
 ```{r summarize by BGC, echo=FALSE}
-by_BGC <- mydata6 %>% 
-  group_by(BGC) %>% 
-  #summarize_all(list (~min(.), ~mean(.), ~max(.)), na.rm = TRUE)
-  summarize_all (~mean(.), na.rm = TRUE)
-by_BGC
+pts_BGC <- mydata6 %>% 
+  group_by(BGC) %>% summarize (n = n() , na.rm = TRUE)
+### summarize by select list of variables
+BGC_climate <- mydata5 %>% 
+  group_by(BGC) %>% summarize_at(vars(var.list) , funs(mean, sd),na.rm = TRUE)
+
+###summarize by all variables in a reduced variable data set
+ BGC_climate <- mydata6 %>% 
+   group_by(BGC) %>%
+   summarize_all(list (~mean(.), ~min(.), ~max(.)), na.rm = TRUE)
+
+BGC.list <- as.list(mydata6$BGC)
+BGC.count <- mydata6 [,lapply(length), by = BGC]
 write.csv (by_BGC, "./outputs/Climate_Means_by_BGC_for_SI50.csv")
 ```
 
