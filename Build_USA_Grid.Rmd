@@ -1,0 +1,121 @@
+---
+title: "Build_USA_BEC"
+author: "William H MacKenzie"
+date: "27/10/2019"
+output: html_document
+---
+
+#Script to create gridded points and intersect with State and BGC layers
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list=ls())
+library(dplyr)
+library(rgdal)
+library(sp)
+library(raster)
+library(rgeos)
+library(maptools)
+library(magrittr)
+library(tibble)
+library(tidyr)
+library(sf)
+library(tcltk)
+library(foreach)
+library(httr)
+library(jsonlite)
+library(randomForest)
+library(data.table)
+require(survey)
+require(fasterize)
+require(tibble)
+require(maptools)
+require(tictoc)
+```
+
+##Build fine scale hex raster for USA_BGC build
+
+Creates a hex grid. Use this function for USBGC map build
+x= polygon, cell
+
+```{r Build USA Grid, echo=FALSE}
+tic()
+CRS.albers <- CRS ("+proj=aea +lat_1=50 +lat_2=58.5 +lat_0=45 +lon_0=-126 +x_0=1000000 +y_0=0 +datum=NAD83 +units=m +no_defs")
+CRS.NAD83 <- CRS("+init=epsg:4269")
+
+### Read in the combined state boundary files for WNA
+WNA <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "USA_States")#layer = "USA_States"
+# set projection
+WNA <- spTransform(WNA, CRS.albers)
+# ### Read in combine BGC layers
+# BGC <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "BGCv11_AB_BGCs")
+# BGC <- spTransform(BGC, CRS.albers)
+
+####set projection to NAD83
+CRS.NAD83 <- CRS("+init=epsg:4269")
+
+# ### Read in the combined state boundary files for WNA
+# WNA <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "WNA_Merge_States")
+# WNA <- spTransform(WNA, CRS.albers)
+### Reada in DEM for WNA and transform to NAD83
+WNA_DEM <- raster("./inputs/SpatialFiles/DEMs/WNA_DEM_clipped.tif")
+projection(WNA_DEM) <- CRS.NAD83
+
+### set hex grid size here  
+size <- 10000
+  p <- spsample(WNA, cellsize = c(size), type = "hexagonal",offset = c(0, 0))# type "regular" (need 2 sizes)
+
+  p2 <- spTransform(p, CRS.NAD83) # albers to lat long in NAD83
+
+  coords <- p2@coords
+  coords <- as.data.frame(coords)
+  #extracts elevation for each point in p
+  coords$elev <- raster::extract(WNA_DEM,p)
+  colnames(coords) <- c("longitude","latitude","elevation")
+  coords <- as_tibble(rownames_to_column(coords, var = "ID1"))
+  #overlay of points over administrative boundaries
+  WNA$State <- as.character (WNA$State)
+pnt_state <- over(p, WNA[,"State"],  minDimension = 1, returnList = FALSE) 
+  pnt_state <- as_tibble(rownames_to_column(pnt_state, var = "ID1"))
+
+ # overlay points over BGC boundaries
+# BGC$BGC <- as.character(BGC$BGC)
+# pnt_BGC <- over(p, BGC[,"BGC"],  minDimension = 1, returnList = FALSE) 
+#   pnt_BGC <- as_tibble(rownames_to_column(pnt_BGC, var = "ID1"))
+# pts.info <- left_join(pnt_BGC, pnt_state,  by = "ID1")
+pts.info <- left_join(pnt_state, coords,  by = "ID1")
+pts.info <- pts.info %>% drop_na(State)
+
+pts.info2 <- pts.info %>% dplyr::select(ID1, State, latitude, longitude, elevation) #variable order for ClimateWNA
+write.csv (pts.info2,  "./outputs/Climate_Data/USA_800m_Grid_Climate.csv", row.names = FALSE) ### this file to be submitted to ClimateWNA
+
+pts.spatial <- SpatialPointsDataFrame(pts.info[,3:4],
+                    pts.info,    #the R object to convert
+                    proj4string = CRS.NAD83)   # assign a CRS 
+
+  writeOGR (obj = pts.spatial, dsn = "./outputs/Hex_Spatial/USA_HexGrid_800m.shp", layer = "GridPoints", driver = "ESRI Shapefile", overwrite_layer = TRUE)
+  
+    ###create a hex spatial polygons layer to match points
+       hexs <- HexPoints2SpatialPolygons(p)
+        o <- as.data.frame(over(hexs, p))
+        #o <- as.data.frame(st_intersects(hexs, p))
+        row.names(o) <- row.names(hexs)
+        hexs <- SpatialPolygonsDataFrame(hexs, data=o)
+        #hexs2 <- gIntersection(hexs, WNA, byid = TRUE)
+        hexs <- spTransform(hexs, CRS.albers)
+        writeOGR (obj = hexs, dsn = "./outputs/Hex_Spatial/USA_HexPoly_800m.shp", 
+                  layer = "HexPoly", driver = "ESRI Shapefile", overwrite_layer = TRUE) 
+ toc()
+
+```
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
