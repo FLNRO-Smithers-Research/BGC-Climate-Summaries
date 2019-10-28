@@ -4,6 +4,7 @@ author: "William H MacKenzie"
 date: "17/10/2019"
 output: html_document
 ---
+#Script to create gridded points and intersect with State and BGC layers
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -114,7 +115,7 @@ Creates a hex grid. Use this function for USBGC map build
 x= polygon, cell
 
 ````{r grid function}
-source("Function_make_HexGrid.R")
+source("_Function_make_HexGrid.R")
 
 CRS.albers <- CRS ("+proj=aea +lat_1=50 +lat_2=58.5 +lat_0=45 +lon_0=-126 +x_0=1000000 +y_0=0 +datum=NAD83 +units=m +no_defs")
 CRS.NAD83 <- CRS("+init=epsg:4269")
@@ -122,23 +123,22 @@ CRS.NAD83 <- CRS("+init=epsg:4269")
 ### Read in the combined state boundary files for WNA
 USA <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "USA_States")
 USA <- spTransform(USA, CRS.albers)
-USA_buff <- gBuffer(USA, byid=FALSE, width = 1.1) ##expand size of USA to capture boundaries
-
-size <- 800
+USA_buff <- gBuffer(USA, byid=FALSE, width = 2) ##expand size of USA to capture boundaries
+size <- 8000
 USA_BGC_pts <- make_grid(USA_buff, cell_diameter = size, clip = FALSE)
 #convert to SpatialPointsDataFrame and write shape file
   p <- data.frame (ID1 = 1 :length(USA_BGC_pts))
-USA_BGC_pts2 <- SpatialPointsDataFrame(USA_BGC_pts, data = p)        
+  p2 <- SpatialPointsDataFrame(USA_BGC_pts, data = p)        
 
-writeOGR (obj = USA_BGC_pts2, dsn = "./inputs/created/USA_HexGrid_1k_new.shp", 
+writeOGR (obj = p2, dsn = "./inputs/created/USA_HexGrid_8000m_new.shp", 
           layer = "GridPoints", driver = "ESRI Shapefile", overwrite_layer = TRUE)
 #create CSV output for ClimateBC        
-   p2 <- spTransform(USA_BGC_pts, CRS.NAD83) # to lat long in NAD83
-  coords <- p2@coords
+   p3 <- spTransform(USA_BGC_pts, CRS.NAD83) # to lat long in NAD83
+  coords <- p3@coords
   coords <- as.data.frame(coords)
 WNA_DEM <- raster("./inputs/SpatialFiles/DEMs/WNA_DEM_clipped.tif")
 projection(WNA_DEM) <- CRS.NAD83
-    coords$elev <- raster::extract(WNA_DEM,p2)
+    coords$elev <- raster::extract(WNA_DEM,p3)
   colnames(coords) <- c("longitude","latitude","elevation")
   coords <- as_tibble(rownames_to_column(coords, var = "ID1"))
   #overlay of points over administrative boundaries
@@ -148,14 +148,14 @@ pnt_state <- over(USA_BGC_pts, USA[,"State"],  minDimension = 1, returnList = FA
   pnt_state <- as_tibble(rownames_to_column(pnt_state, var = "ID1"))
 pts.info <- left_join(pnt_state, coords,  by = "ID1")
 pts.info2 <- pts.info %>% dplyr::select(ID1, State, latitude, longitude, elevation) #order for ClimateWNA
-write.csv (pts.info2,  "./inputs/created/USA_1km_Grid_Climate.csv", row.names = FALSE)         
+write.csv (pts.info2,  "./inputs/created/USA_8000m_Grid_Climate_new.csv", row.names = FALSE)         
 
   
   USA_BGC_hex <- make_hex (USA_buff, cell_diameter = size, clip = FALSE)
 #convert to SpatialPolygonsDataFrame
   o <- data.frame (ID1 = 1 :length(USA_BGC_hex))
         USA_BGC_hex2 <- SpatialPolygonsDataFrame(USA_BGC_hex, data = o)
-    writeOGR (obj = USA_BGC_hex2, dsn = "./inputs/created/USA_HexPoly_1k_new.shp", layer = "HexPolys", driver = "ESRI Shapefile", overwrite_layer = TRUE)
+    writeOGR (obj = USA_BGC_hex2, dsn = "./inputs/created/USA_HexPoly_8000m_new.shp", layer = "HexPolys", driver = "ESRI Shapefile", overwrite_layer = TRUE)
 
 
 ```
@@ -163,6 +163,7 @@ write.csv (pts.info2,  "./inputs/created/USA_1km_Grid_Climate.csv", row.names = 
 
 
 
+#Some working scripts that could be adopted.
 
 ## Function from  https://dieghernan.github.io/201906_Beautiful1/
 
