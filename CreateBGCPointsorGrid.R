@@ -3,7 +3,7 @@
 ##Process 2 creates a regular grid of points to be applied in mapping script
 ###Kiri Daust, August 2018
 
-.libPaths("E:/R packages351")
+#.libPaths("E:/R packages351")
 rm(list=ls())
 library(dplyr)
 library(rgdal)
@@ -23,12 +23,11 @@ library(randomForest)
 library(data.table)
 require(survey)
 
-wd <- tk_choose.dir(); setwd(wd)
 
-dem <- raster("bc25fill") ###Read DEM
-bec11 <- st_read(dsn="BGCv11_WithLandcover.gdb",layer="BGCv11_withLandcover") ##read BGC shape file - updated to clipped version
+dem <- raster("./inputs/SpatialFiles/bc25fill") ###Read DEM
+bec11 <- st_read(dsn="./inputs/SpatialFiles/BGCv11_WithLandcover.gdb",layer="BGCv11_withLandcover") ##read BGC shape file - updated to clipped version
 CRS.albers <- CRS ("+proj=aea +lat_1=50 +lat_2=58.5 +lat_0=45 +lon_0=-126 +x_0=1000000 +y_0=0 +datum=NAD83 +units=m +no_defs")
-allUnits <- unique(as.character(bec11$BGC_LABEL))###What units are in BEC?
+allUnits <- unique(as.character(bec11$MAP_LABEL))###What units are in BEC?
 allUnits <- allUnits[allUnits !=""]
 ##set up for parallel processing
 require(doParallel)
@@ -36,28 +35,29 @@ set.seed(123321)
 coreNum <- as.numeric(detectCores()-1)
 coreNo <- makeCluster(coreNum)
 registerDoParallel(coreNo, cores = coreNum)
-clusterEvalQ(coreNo, .libPaths("E:/R packages351"))
-#BGC = "CWHwh1"
+#clusterEvalQ(coreNo, .libPaths("E:/R packages351"))
+#BGC = "CWH wh 1"
 
 ###randomly select  points within each BEC unit and get elevation data
 out <- foreach(BGC = allUnits, .combine = rbind, .packages = c("sf","sp","raster")) %dopar% {
-  temp <- bec11$Shape[bec11$BGC_LABEL == BGC] ###Extract polygons for each subzones
+  temp <- bec11$Shape[bec11$MAP_LABEL == BGC] ###Extract polygons for each subzones
   temp <- as(temp, "Spatial") ##conver to sp
-  p <- spsample(temp, 1500, type = "regular", offset = c(0, 0)) #, iter = 15   change for number of points here
+  p <- spsample(temp, 100, type = "regular", offset = c(0, 0)) #, iter = 15   change for number of points here
   p <- spTransform(p, CRS("+init=epsg:4617")) #to lat lon in NAD83
     #p <- spTransform(p, CRS("+init=epsg:4326")) #to lat lon in WGS84
   coords <- p@coords
   coords <- as.data.frame(coords)
   
  p2 <- spTransform(p, CRS(proj4string(dem)))
- coords$Elevation <- raster::extract(dem,p2) ##get elevation for each point
+ coords$el <- raster::extract(dem,p2) ##get elevation for each point
   coords$BGC <- BGC
   coords
 }
 stopCluster(coreNo)
-out2 <- out[out$y < 60,]
-out2 = out2[,c("BGC", "y","x","Elevation")]
-write.csv(out2,"BECv11_1500Pt_Reg.csv", row.names = TRUE) ##rename for version and number of points
+out2 <- rename(out, "lon" = "x1", "lat" = "x2", "el" = "Elevation")
+out2 <- out2[out2$lat < 60,]
+out2 = out2[,c("BGC", "lat","lon","Elevation")]
+write.csv(out2,"BECv11_100Pt_Reg.csv", row.names = TRUE) ##rename for version and number of points
 
 
 ####select random points from Alberta
@@ -109,13 +109,13 @@ US <- spTransform(US, CRS.albers)
 BCdem <- raster("bc25fill")
 
 ###combine alberta and US DEMs
-ABdem <- raster("AlbertaDEM.tif")
-USdem1 <- raster("USA_WestDEM.tif")
-USdem2 <- raster("USA_WestCoastDEM.tif")
+ABdem <- raster("./inputs/SpatialFiles/AlbertaDEM.tif")
+USdem1 <- raster("./inputs/SpatialFiles/USA_WestDEM.tif")
+USdem2 <- raster("./inputs/SpatialFiles/USA_WestCoastDEM.tif")
 USdem <- raster::merge(USdem1,USdem2)
 allDEM <- raster::merge(ABdem,USdem) # not possible to merge BC with rasters due to different resolutions
-writeRaster(allDEM, filename = "US_AB_DEM.tif")
-allDEM <- raster("US_AB_DEM.tif")
+writeRaster(allDEM, filename = "./inputs/SpatialFiles/WNA.tif")
+allDEM <- raster("WNA.tif")
 
 #####Loop through BC, Alberta, and US to create grid
 names <- c("BC","AB","USA")
