@@ -123,14 +123,14 @@ CRS.NAD83 <- CRS("+init=epsg:4269")
 ### Read in the combined state boundary files for WNA
 USA <- readOGR(dsn = "./inputs/SpatialFiles/BC_AB_US_Shp", layer = "USA_States")
 USA <- spTransform(USA, CRS.albers)
-USA_buff <- gBuffer(USA, byid=FALSE, width = 2) ##expand size of USA to capture boundaries
-size <- 8000
+USA_buff <- gBuffer(USA, byid=FALSE, width = 1) ##expand size of USA to capture boundaries
+size <- 800
 USA_BGC_pts <- make_grid(USA_buff, cell_diameter = size, clip = FALSE)
 #convert to SpatialPointsDataFrame and write shape file
   p <- data.frame (ID1 = 1 :length(USA_BGC_pts))
   p2 <- SpatialPointsDataFrame(USA_BGC_pts, data = p)        
 
-writeOGR (obj = p2, dsn = "./inputs/created/USA_HexGrid_8000m_new.shp", 
+writeOGR (obj = p2, dsn = "./inputs/created/USA_HexGrid_800m_new.shp", 
           layer = "GridPoints", driver = "ESRI Shapefile", overwrite_layer = TRUE)
 #create CSV output for ClimateBC        
    p3 <- spTransform(USA_BGC_pts, CRS.NAD83) # to lat long in NAD83
@@ -148,14 +148,14 @@ pnt_state <- over(USA_BGC_pts, USA[,"State"],  minDimension = 1, returnList = FA
   pnt_state <- as_tibble(rownames_to_column(pnt_state, var = "ID1"))
 pts.info <- left_join(pnt_state, coords,  by = "ID1")
 pts.info2 <- pts.info %>% dplyr::select(ID1, State, latitude, longitude, elevation) #order for ClimateWNA
-write.csv (pts.info2,  "./inputs/created/USA_8000m_Grid_Climate_new.csv", row.names = FALSE)         
+write.csv (pts.info2,  "./inputs/created/USA_800m_Grid_Climate_new.csv", row.names = FALSE)         
 
   
   USA_BGC_hex <- make_hex (USA_buff, cell_diameter = size, clip = FALSE)
 #convert to SpatialPolygonsDataFrame
   o <- data.frame (ID1 = 1 :length(USA_BGC_hex))
         USA_BGC_hex2 <- SpatialPolygonsDataFrame(USA_BGC_hex, data = o)
-    writeOGR (obj = USA_BGC_hex2, dsn = "./inputs/created/USA_HexPoly_8000m_new.shp", layer = "HexPolys", driver = "ESRI Shapefile", overwrite_layer = TRUE)
+    writeOGR (obj = USA_BGC_hex2, dsn = "./inputs/created/USA_HexPoly_800m_new.shp", layer = "HexPolys", driver = "ESRI Shapefile", overwrite_layer = TRUE)
 
 
 ```
