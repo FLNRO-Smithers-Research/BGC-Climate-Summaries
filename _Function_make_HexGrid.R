@@ -38,7 +38,7 @@ make_hex <- function(x, cell_diameter, cell_area, clip = FALSE) {
  #                offset = c(0.5, 0.5))
   
   # convert center points to hexagons
-  g2 <- HexPoints2SpatialPolygons(USA_BGC_pts2, dx = cell_diameter)
+  g2 <- HexPoints2SpatialPolygons(p2, dx = cell_diameter)
   # clip to boundary of study area
   if (clip) {
     g2 <- gIntersection(g2, x, byid = TRUE)
